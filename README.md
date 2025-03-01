@@ -2,8 +2,8 @@
 
 ## 项目简介
 这个是一个智能合约漏洞检测的后端接口，用 Flask 搭建，集成了 PyTorch 的 AI 模型（SkipGram 和 Fusion Model）来分析 `.sol` 文件，检测重入漏洞（Reentrancy）。目前完成了文件上传和漏洞检测的 API，制作有简易前端示例。
--作者：BLAIR
--Github：https://github.com/BlairCode
+- Author：BLAIR
+- Github：https://github.com/BlairCode
 
 ## 环境要求
 - Python 3.8 或以上
