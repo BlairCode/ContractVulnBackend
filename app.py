@@ -1,4 +1,4 @@
-# Author: BLAIR (Houbing Zhang)
+# Author: BLAIR
 # Backend interface for smart contract vulnerability detection.
 
 import os
