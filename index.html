@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Contract Vulnerability Detection</title>
+    <style>
+        /* Reset default styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        /* Body styling with gradient background */
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', Arial, sans-serif;
+            background: linear-gradient(135deg, #e6f0fa 0%, #d9e8fb 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        /* Main container styling */
+        .container {
+            max-width: 720px;
+            width: 100%;
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .container:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+        }
+        /* Heading styles */
+        h1 {
+            color: #1e3799;
+            font-size: 2.8em;
+            margin-bottom: 25px;
+            text-align: center;
+            font-weight: 600;
+        }
+        h2 {
+            color: #2e4a80;
+            font-size: 1.6em;
+            margin: 25px 0 15px;
+            font-weight: 500;
+        }
+        /* File upload section */
+        .file-upload {
+            margin-bottom: 25px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .file-label {
+            display: block;
+            padding: 14px;
+            background: #4dabf7;
+            color: #fff;
+            text-align: center;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+        .file-label:hover {
+            background: #339af0;
+            transform: scale(1.03);
+        }
+        #file-name {
+            margin-top: 12px;
+            color: #5c7cfa;
+            font-size: 1.1em;
+            text-align: center;
+        }
+        #upload-status {
+            display: none;
+            margin-top: 12px;
+            padding: 10px;
+            background: #40c057;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 1em;
+            text-align: center;
+            animation: fadeInOut 2s ease forwards;
+        }
+        /* Animation for upload status */
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-10px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
+        /* Checkbox styling */
+        .checkbox-container {
+            margin: 20px 0;
+            text-align: left;
+            padding-left: 25px;
+        }
+        label {
+            color: #495057;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+        }
+        input[type="checkbox"] {
+            margin-right: 10px;
+            accent-color: #4dabf7;
+        }
+        /* Button styling */
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #74c0fc;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+        button:hover {
+            background: #4dabf7;
+            transform: scale(1.03);
+        }
+        button:active {
+            transform: scale(0.97);
+        }
+        /* Result display area */
+        #result {
+            margin-top: 25px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            color: #343a40;
+            font-size: 1.2em;
+            line-height: 1.5;
+            word-wrap: break-word;
+            border-left: 4px solid #4dabf7;
+        }
+        /* Responsive design for smaller screens */
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px;
+            }
+            h1 {
+                font-size: 2.2em;
+            }
+            h2 {
+                font-size: 1.4em;
+            }
+            .file-label, button {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Smart Contract Vulnerability Detection</h1>
+
+        <!-- File upload section -->
+        <div class="file-upload">
+            <label class="file-label" for="file-input">Select Smart Contract File</label>
+            <input type="file" id="file-input" accept=".sol">
+            <p id="file-name">No file selected</p>
+            <p id="upload-status">File uploaded successfully!</p>
+        </div>
+
+        <!-- Vulnerability detection options -->
+        <h2>Detection Options</h2>
+        <div class="checkbox-container">
+            <label>
+                <input type="checkbox" id="reentrancy" checked disabled>
+                Reentrancy Vulnerability
+            </label>
+        </div>
+
+        <!-- Detection button -->
+        <button onclick="detectVulnerabilities()">Start Detection</button>
+
+        <!-- Result display area -->
+        <div id="result">Detection results will be displayed here</div>
+    </div>
+
+    <script>
+        // Global API base URL, dynamically set to current origin
+        const API_BASE_URL = window.location.origin; // e.g., http://127.0.0.1:8888
+
+        let uploadedFilePath = ""; // Store filepath of uploaded file
+
+        // Event listener for file input change, triggers upload
+        document.getElementById("file-input").addEventListener("change", function() {
+            const fileName = this.files[0] ? this.files[0].name : "No file selected";
+            document.getElementById("file-name").textContent = fileName;
+            uploadFile();
+        });
+
+        // Async function to upload file to server
+        async function uploadFile() {
+            const fileInput = document.getElementById("file-input");
+            if (!fileInput.files[0]) {
+                alert("Please select a file first!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/upload`, {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.filepath) {
+                    uploadedFilePath = data.filepath;
+                    showUploadSuccess();
+                } else {
+                    alert("Upload failed: " + (data.error || "Unknown error"));
+                }
+            } catch (error) {
+                alert("Upload failed: " + error.message);
+            }
+        }
+
+        // Show temporary success message after upload
+        function showUploadSuccess() {
+            const uploadStatus = document.getElementById("upload-status");
+            uploadStatus.style.display = "block";
+            setTimeout(() => {
+                uploadStatus.style.display = "none";
+            }, 2000);
+        }
+
+        // Async function to detect vulnerabilities
+        async function detectVulnerabilities() {
+            if (!uploadedFilePath) {
+                alert("Please upload a file first!");
+                return;
+            }
+
+            const vulnerabilities = ["Reentrancy"];
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/detect`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        filepath: uploadedFilePath,
+                        vulnerabilities: vulnerabilities
+                    })
+                });
+                const data = await response.json();
+
+                if (data.results) {
+                    let probs = Array.isArray(data.results.probabilities[0]) 
+                        ? data.results.probabilities[0] 
+                        : data.results.probabilities;
+                    const probText = probs.map(p => 
+                        isNaN(p) ? "Unknown" : (p * 100).toFixed(2) + "%"
+                    ).join(", ");
+                    const resultText = `Result: Contains vulnerability - ${data.results.predicted_class === 1 ? "Yes" : "No"} (Probability: ${probText})`;
+                    document.getElementById("result").textContent = resultText;
+                } else {
+                    document.getElementById("result").textContent = "Detection failed: " + (data.error || "Unknown error");
+                }
+            } catch (error) {
+                document.getElementById("result").textContent = "Detection failed: " + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
