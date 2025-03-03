@@ -21,7 +21,7 @@ from .w2v.model import SkipGram, get_embd_from_sg, get_embd  # For inference sup
 
 # Added: For file processing in inference, from train.py
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from ..cmd import process
+from ..pycmd import process
 
 # Get the project root directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
