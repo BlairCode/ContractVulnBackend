@@ -20,10 +20,10 @@ logging.basicConfig(
     handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()]
 )
 
-# Import custom model modules
-from model.w2v.build_vocab import tokenize
-from model.w2v.model import SkipGram, get_embd
-from model.model import Fusion_Model_BLSTM_ATT
+# Modified: Use relative imports with proper package structure
+from .model.w2v.build_vocab import tokenize
+from .model.w2v.model import SkipGram, get_embd
+from .model.model import Fusion_Model_BLSTM_ATT
 
 # Select device for PyTorch (CUDA, MPS, or CPU)
 if torch.cuda.is_available():

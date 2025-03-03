@@ -1,0 +1,52 @@
+# Python 相关
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 日志文件
+*.log
+app.log
+
+# 模型和检查点文件
+model/checkpoints/
+model/w2v/checkpoints/
+*.pt
+fusion_model.pt
+sg_epoch*.pt
+
+# 上传和输出目录
+uploads/
+out/
+out3.txt
+
+# 环境变量文件
+.env
+
+# IDE 和编辑器相关
+.idea/
+*.iml
+.vscode/
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~
+
+# 编译和构建相关
+*.class
+*.jar
+java/out/
+java/java/out/
+
+# 其他不需要的目录和文件
+*.md
+compile_log.txt
+diff_*.md

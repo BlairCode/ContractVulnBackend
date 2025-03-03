@@ -1,0 +1,153 @@
+{
+	"attributes" : 
+	{
+		"assignments" : 
+		[
+			5
+		]
+	},
+	"children" : 
+	[
+		{
+			"attributes" : 
+			{
+				"constant" : false,
+				"name" : "a",
+				"scope" : 10,
+				"stateVariable" : false,
+				"storageLocation" : "default",
+				"type" : "uint256",
+				"value" : null,
+				"visibility" : "internal"
+			},
+			"children" : 
+			[
+				{
+					"attributes" : 
+					{
+						"name" : "uint256",
+						"type" : "uint256"
+					},
+					"id" : 4,
+					"name" : "ElementaryTypeName",
+					"src" : "92:7:0"
+				}
+			],
+			"id" : 5,
+			"name" : "VariableDeclaration",
+			"src" : "92:9:0"
+		},
+		{
+			"attributes" : 
+			{
+				"argumentTypes" : null,
+				"isConstant" : false,
+				"isLValue" : false,
+				"isPure" : false,
+				"lValueRequested" : false,
+				"member_name" : "timestamp",
+				"referencedDeclaration" : null,
+				"type" : "uint256"
+			},
+			"children" : 
+			[
+				{
+					"attributes" : 
+					{
+						"argumentTypes" : null,
+						"overloadedDeclarations" : 
+						[
+							null
+						],
+						"referencedDeclaration" : 15,
+						"type" : "block",
+						"value" : "block"
+					},
+					"id" : 6,
+					"name" : "Identifier",
+					"src" : "104:5:0"
+				}
+			],
+			"id" : 7,
+			"name" : "MemberAccess",
+			"src" : "104:15:0"
+		}
+	],
+	"id" : 8,
+	"name" : "VariableDeclarationStatement",
+	"src" : "92:27:0"
+}
+
+{
+	"children" : 
+	[
+		{
+			"attributes" : 
+			{
+				"argumentTypes" : null,
+				"isConstant" : false,
+				"isLValue" : false,
+				"isPure" : false,
+				"lValueRequested" : false,
+				"operator" : "=",
+				"type" : "uint256"
+			},
+			"children" : 
+			[
+				{
+					"attributes" : 
+					{
+						"argumentTypes" : null,
+						"overloadedDeclarations" : 
+						[
+							null
+						],
+						"referencedDeclaration" : 5,
+						"type" : "uint256",
+						"value" : "a"
+					},
+					"id" : 7,
+					"name" : "Identifier",
+					"src" : "105:1:0"
+				},
+				{
+					"attributes" : 
+					{
+						"argumentTypes" : null,
+						"isConstant" : false,
+						"isLValue" : false,
+						"isPure" : false,
+						"lValueRequested" : false,
+						"member_name" : "timestamp",
+						"referencedDeclaration" : null,
+						"type" : "uint256"
+					},
+					"children" : 
+					[
+						{
+							"attributes" : 
+							{
+								"argumentTypes" : null,
+								"overloadedDeclarations" : 
+								[
+									null
+								],
+								"referencedDeclaration" : 18,
+								"type" : "block",
+								"value" : "block"
+							},
+							"id" : 8,
+							"name" : "Identifier",
+							"src" : "109:5:0"
+						}
+					],
+					"id" : 9,
+					"name" : "MemberAccess",
+					"src" : "109:15:0"
+				}
+			],
+			"id" : 10,
+			"name" : "Assignment",
+			"src" : "105:19:0"
+		}
+

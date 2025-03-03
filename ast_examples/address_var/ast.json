@@ -1,0 +1,29 @@
+{
+	"attributes" : 
+	{
+		"constant" : false,
+		"name" : "owner",
+		"scope" : 4,
+		"stateVariable" : true,
+		"storageLocation" : "default",
+		"type" : "address",
+		"value" : null,
+		"visibility" : "public"
+	},
+	"children" : 
+	[
+		{
+			"attributes" : 
+			{
+				"name" : "address",
+				"type" : "address"
+			},
+			"id" : 2,
+			"name" : "ElementaryTypeName",
+			"src" : "42:7:0"
+		}
+	],
+	"id" : 3,
+	"name" : "VariableDeclaration",
+	"src" : "42:20:0"
+}
