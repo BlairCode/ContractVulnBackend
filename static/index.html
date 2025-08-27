@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SCANA Full Test Frontend</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 2rem auto; }
+    input, button, textarea { font-size: 1rem; margin: 0.3rem 0; padding: 0.4rem; width: 100%; }
+    section { border: 1px solid #ccc; padding: 1rem; margin-bottom: 1rem; }
+    h2 { margin-top: 0; }
+    .success { color: green; }
+    .error { color: red; }
+    pre { background: #f4f4f4; padding: 0.5rem; overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+<h1>SCANA API Testing Frontend</h1>
+
+<!-- ✅ Register -->
+<section>
+  <h2>Register</h2>
+  <input id="reg-username" placeholder="Username" />
+  <input id="reg-password" type="password" placeholder="Password" />
+  <button onclick="register()">Register</button>
+  <p id="reg-result"></p>
+</section>
+
+<!-- ✅ Login -->
+<section>
+  <h2>Login</h2>
+  <input id="login-username" placeholder="Username" />
+  <input id="login-password" type="password" placeholder="Password" />
+  <button onclick="login()">Login</button>
+  <p id="login-result"></p>
+</section>
+
+<!-- ✅ Logout -->
+<section>
+  <h2>Logout</h2>
+  <button onclick="logout()">Logout</button>
+  <p id="logout-result"></p>
+</section>
+
+<!-- ✅ Start Scan -->
+<section>
+  <h2>Start Scan</h2>
+  <input id="scan-filename" placeholder="Filename (optional if upload file)" />
+  <input id="scan-file" type="file" />
+  <textarea id="scan-code" placeholder="Or paste code here..." rows="6"></textarea>
+  <button onclick="startScan()">Start Scan</button>
+  <p id="scan-result"></p>
+</section>
+
+<script>
+  async function startScan() {
+    const fileInput = document.getElementById('scan-file');
+    const filenameInput = document.getElementById('scan-filename').value.trim();
+    const codeInput = document.getElementById('scan-code').value;
+
+    let formData = new FormData();
+
+    if (fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      formData.append('file', file);
+      // 如果没输入文件名就用文件名
+      if (filenameInput) {
+        formData.append('filename', filenameInput);
+      } else {
+        formData.append('filename', file.name);
+      }
+    } else {
+      // 不上传文件，用文本模式
+      if (!filenameInput || !codeInput) {
+        display('scan-result', 'Please provide filename and code if no file is uploaded.', true);
+        return;
+      }
+      formData.append('filename', filenameInput);
+      formData.append('code', codeInput);
+    }
+
+    const res = await fetch(apiBase + '/scan/start', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+      // 注意：这里不能设置Content-Type，浏览器会自动帮我们设置multipart/form-data
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      currentTaskId = data.task_id;
+      document.getElementById('status-task-id').value = currentTaskId;
+      display('scan-result', `Scan started. Task ID: ${currentTaskId}`);
+    } else {
+      display('scan-result', data.error || 'Failed to start scan', true);
+    }
+  }
+</script>
+
+<!-- ✅ Check Status -->
+<section>
+  <h2>Check Scan Status</h2>
+  <input id="status-task-id" placeholder="Task ID" />
+  <button onclick="checkStatus()">Check Status</button>
+  <pre id="status-result"></pre>
+</section>
+
+<!-- ✅ View History -->
+<section>
+  <h2>Scan History</h2>
+  <button onclick="getHistory()">Load History</button>
+  <pre id="history-result"></pre>
+</section>
+
+<script>
+  const apiBase = '/api';
+  let currentTaskId = null;
+
+  function display(id, text, isError = false) {
+    const el = document.getElementById(id);
+    el.innerText = text;
+    el.className = isError ? 'error' : 'success';
+  }
+
+  async function register() {
+    const username = document.getElementById('reg-username').value;
+    const password = document.getElementById('reg-password').value;
+    const res = await fetch(apiBase + '/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    display('reg-result', data.message || data.error, !res.ok);
+  }
+
+  async function login() {
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+    const res = await fetch(apiBase + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    display('login-result', data.message || data.error, !res.ok);
+  }
+
+  async function logout() {
+    const res = await fetch(apiBase + '/logout', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    const data = await res.json();
+    display('logout-result', data.message || data.error, !res.ok);
+  }
+
+  // async function startScan() {
+  //   const filename = document.getElementById('scan-filename').value;
+  //   const code = document.getElementById('scan-code').value;
+  //   const res = await fetch(apiBase + '/scan/start', {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     credentials: 'include',
+  //     body: JSON.stringify({ filename, code })
+  //   });
+  //   const data = await res.json();
+  //   if (res.ok) {
+  //     currentTaskId = data.task_id;
+  //     document.getElementById('status-task-id').value = currentTaskId;
+  //     display('scan-result', `Scan started. Task ID: ${currentTaskId}`);
+  //   } else {
+  //     display('scan-result', data.error || 'Failed to start scan', true);
+  //   }
+  // }
+
+  async function checkStatus() {
+    const taskId = document.getElementById('status-task-id').value;
+    const res = await fetch(apiBase + '/scan/status/' + taskId, {
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (res.ok) {
+      document.getElementById('status-result').innerText = JSON.stringify(data, null, 2);
+    } else {
+      document.getElementById('status-result').innerText = 'Error: ' + (data.error || 'Unable to fetch status');
+    }
+  }
+
+  async function getHistory() {
+    const res = await fetch(apiBase + '/scan/history', {
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if (res.ok) {
+      document.getElementById('history-result').innerText = JSON.stringify(data, null, 2);
+    } else {
+      document.getElementById('history-result').innerText = 'Error loading history.';
+    }
+  }
+</script>
+
+</body>
+</html>
