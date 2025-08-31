@@ -1,0 +1,14 @@
+.DS_Store
+out/*
+dataset/*
+venv
+.solcx/*
+__pycache__/
+__pycache__
+java/out/*
+model/checkpoints/*
+model/w2v/checkpoints/*
+model/w2v/vocab.txt
+eval/
+logs/*
+instance/*
