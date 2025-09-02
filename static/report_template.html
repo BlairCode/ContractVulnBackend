@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智能合约安全分析报告 - {{FILENAME}}</title>
+  <!--
+    本模板用于生成最终的 HTML 报告，后端通过占位符替换方式进行渲染：
+    - 文件名：{{FILENAME}}
+    - 作业ID：{{JOB_ID}}
+    - 生成时间：{{GENERATED_AT}}
+    - 最终评分：{{FINAL_SCORE}}
+    - 严重性：{{SEVERITY}}
+    - 发现问题数：{{VULN_COUNT}}
+    - ML 概率：{{ML_PROB}}
+    - LLM 总体评分：{{LLM_OVERALL}}
+    - 冲突检测：{{CONFLICT_DETECTED}}
+    - 冲突原因：{{CONFLICT_REASON}}
+    - 业务域：{{BUSINESS_DOMAIN}}
+    - 区块链：{{CHAIN}}
+    - 编译器版本：{{COMPILER_VERSION}}
+    - 备注：{{NOTES}}
+    - 上传时间：{{UPLOAD_TIME}}
+    - 关键发现（HTML 片段）：{{TOP_FINDINGS_HTML}}
+  -->
+  <style>
+    body { font-family: Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+    .header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 16px; margin-bottom: 24px; }
+    .title { font-size: 28px; color: #333; margin: 0; }
+    .subtitle { color: #666; margin: 6px 0; font-size: 14px; }
+
+    .score-section { display: flex; gap: 16px; margin: 24px 0; }
+    .score-card { flex: 1; text-align: center; padding: 16px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; }
+    .score-value { font-size: 42px; font-weight: 700; color: #333; }
+    .score-label { font-size: 12px; color: #666; }
+
+    .section { margin: 24px 0; }
+    .section-title { font-size: 18px; color: #333; border-left: 4px solid #007bff; padding-left: 10px; margin-bottom: 12px; }
+
+    .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef; }
+    .meta-grid p { margin: 0; font-size: 13px; color: #444; }
+
+    .finding { background: #f8f9fa; border-left: 4px solid #007bff; padding: 12px; margin: 12px 0; border-radius: 4px; }
+    .finding-header { font-weight: 700; color: #333; }
+    .finding-details { margin-top: 8px; color: #555; font-size: 13px; }
+
+    .footer { text-align: center; color: #888; font-size: 12px; margin-top: 28px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="title">智能合约安全分析报告</h1>
+      <div class="subtitle">文件：{{FILENAME}}</div>
+      <div class="subtitle">作业ID：{{JOB_ID}}</div>
+      <div class="subtitle">生成时间：{{GENERATED_AT}}</div>
+    </div>
+
+    <div class="score-section">
+      <div class="score-card">
+        <div class="score-value">{{FINAL_SCORE}}</div>
+        <div class="score-label">风险评分</div>
+      </div>
+      <div class="score-card">
+        <div class="score-value">{{SEVERITY}}</div>
+        <div class="score-label">严重等级</div>
+      </div>
+      <div class="score-card">
+        <div class="score-value">{{VULN_COUNT}}</div>
+        <div class="score-label">发现问题</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">关键发现</h2>
+      {{TOP_FINDINGS_HTML}}
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">分析详情</h2>
+      <div class="meta-grid">
+        <p><strong>ML模型概率：</strong>{{ML_PROB}}</p>
+        <p><strong>LLM整体评分：</strong>{{LLM_OVERALL}}</p>
+        <p><strong>冲突检测：</strong>{{CONFLICT_DETECTED}}</p>
+        <p><strong>冲突原因：</strong>{{CONFLICT_REASON}}</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">文件与业务信息</h2>
+      <div class="meta-grid">
+        <p><strong>业务域：</strong>{{BUSINESS_DOMAIN}}</p>
+        <p><strong>区块链：</strong>{{CHAIN}}</p>
+        <p><strong>编译器版本：</strong>{{COMPILER_VERSION}}</p>
+        <p><strong>备注：</strong>{{NOTES}}</p>
+        <p><strong>上传时间：</strong>{{UPLOAD_TIME}}</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>本报告由智能合约安全分析系统自动生成 | 可追溯ID：{{JOB_ID}}</p>
+    </div>
+  </div>
+</body>
+</html>

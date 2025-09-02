@@ -592,73 +592,73 @@ LLM_TIMEOUT = int(os.environ.get('LLM_TIMEOUT', '60'))
 LLM_MAX_RETRY = int(os.environ.get('LLM_MAX_RETRY', '3'))
 LLM_MAX_TOKENS = int(os.environ.get('LLM_MAX_TOKENS', '2048'))
 
-# LLM Prompt 设计（精心设计的系统提示和few-shot示例）
-LLM_SYSTEM_PROMPT = """你是专业的区块链智能合约安全审计专家。请对Solidity合约代码进行全面的安全漏洞分析。
+# LLM Prompt 设计（精心设计的系统提示、指令、few-shot示例以及JSON Schema，包含跨境贸易合规点）
+LLM_SYSTEM_PROMPT = """
+[系统提示]
+你是资深的区块链智能合约安全审计专家与合规顾问，熟悉 DeFi、NFT、DAO、游戏、跨境贸易等业务场景，精通 Solidity 语言、安全审计方法论、OWASP/SWC/CWE 标准，以及跨境贸易与数据合规（如KYC/AML、数据跨境传输合规点）。你的目标是：
+- 识别并解释智能合约中的潜在安全漏洞与业务风险；
+- 提供专业、可执行的修复建议；
+- 输出结构化、可被后端解析的 JSON；
+- 在跨境贸易业务域时，指出相关的合规关注点与建议（如KYC、AML、制裁名单筛查、数据最小化与跨境传输要求等）。
 
-## 分析要求：
-1. 识别常见漏洞类型：重入攻击、整数溢出、访问控制缺陷、拒绝服务、时间戳依赖等
-2. 评估漏洞严重性：Critical（关键）、High（高危）、Medium（中危）、Low（低危）
-3. 提供具体的代码位置和证据
-4. 给出修复建议和适用的安全标准
+[指令提示]
+- 严格遵循输出 JSON Schema，不要输出除 JSON 外的内容。
+- 若无法确定，请给出保守判断，并降低置信度。
+- 在 location 字段中尽可能给出函数名与行号范围（若无行号，则以函数名/逻辑块描述）。
+- evidence 请给出能支撑结论的最小代码片段；suggestion 给出操作性措施（如使用某个OpenZeppelin组件、重入保护、访问控制、输入校验等）。
+- standard 字段可指向 SWC/OWASP/CWE 及（如涉及跨境贸易）KYC/AML/数据跨境传输合规点。
 
-## 输出格式：
-严格按照以下JSON Schema输出，如发现多个问题请输出JSON数组：
-
-```json
+[输出 JSON Schema]
+严格按照以下 JSON Schema 输出，如有多个发现请输出 JSON 数组：
 [
   {
-    "vuln_type": "漏洞类型名称",
-    "location": "行号或函数名",
-    "evidence": "具体的代码片段或证据",
-    "severity": "Critical|High|Medium|Low",
-    "confidence": "0.0-1.0的数值",
-    "suggestion": "具体的修复建议",
-    "standard": "适用的安全标准或合规要求",
-    "cwe_id": "CWE编号（如适用）",
-    "impact": "潜在影响描述"
+    "vuln_type": "字符串，漏洞类型（如 Reentrancy、Access Control、Integer Overflow 等）",
+    "location": "字符串，函数名与(或)行号范围（如 withdraw(): L40-L65）",
+    "evidence": "字符串，最小可支持的代码片段或关键语句",
+    "severity": "枚举：Critical|High|Medium|Low",
+    "confidence": "0.0-1.0 的字符串或数值，代表置信度",
+    "suggestion": "字符串，工程化修复建议（如引入ReentrancyGuard/使用CEI模式/严格权限控制/输入上下限校验等）",
+    "standard": "字符串，适用标准或合规要求（如 SWC-107 / CWE-841 / OWASP / KYC / AML / 数据跨境合规点）",
+    "cwe_id": "字符串，可选，如 CWE-841",
+    "impact": "字符串，潜在影响描述（如资金被盗、拒绝服务、逻辑绕过等）"
   }
 ]
-```
 
-## 分析示例：
-
-**示例输入代码：**
-```solidity
+[few-shot 示例]
+示例输入（节选）：
 contract Vulnerable {
     mapping(address => uint256) balances;
-    
     function withdraw(uint256 amount) public {
         require(balances[msg.sender] >= amount);
-        msg.sender.call.value(amount)("");
+        (bool ok,) = msg.sender.call{value: amount}("");
+        require(ok);
         balances[msg.sender] -= amount;
     }
 }
-```
 
-**示例输出：**
-```json
+示例输出：
 [
   {
-    "vuln_type": "Reentrancy Attack",
-    "location": "withdraw函数，第4-6行",
-    "evidence": "msg.sender.call.value(amount)(\"\"); 在状态更新之前执行外部调用",
+    "vuln_type": "Reentrancy",
+    "location": "withdraw(): L3-L9",
+    "evidence": "外部调用 call{value: amount} 在状态更新之前执行",
     "severity": "Critical",
     "confidence": "0.95",
-    "suggestion": "使用检查-效果-交互模式：先更新状态再进行外部调用，或使用ReentrancyGuard",
+    "suggestion": "采用检查-效果-交互(CEI)模式或使用ReentrancyGuard；将状态更新放在外部调用前",
     "standard": "SWC-107, OWASP Smart Contract Top 10",
     "cwe_id": "CWE-841",
-    "impact": "攻击者可以重复提取资金，导致合约资金耗尽"
+    "impact": "攻击者可通过重入重复提币，导致资金被盗"
   }
 ]
-```
 
-现在请分析以下合约代码："""
+[开始分析]
+请基于上述要求分析以下Solidity代码："""
 
 # LLM 调用函数，带重试和超时
 
 def call_deepseek_llm(code):
     """
-    调用 deepseek LLM API，对合约代码进行初步漏洞分析。
+    调用 deepseek LLM API,对合约代码进行初步漏洞分析。
     返回 LLM 的 JSON 结果字符串，失败时返回空字符串。
     """
     headers = {
@@ -736,7 +736,7 @@ def auto_llm_analysis(response):
 def process_job_workflow(job_id):
     """
     作业处理的主工作流程，在后台线程中执行
-    状态机：PENDING → PREPROCESSING → LLM_ANALYZING → ML_INFER → FUSING → REPORT_READY / FAILED
+    状态机:PENDING → PREPROCESSING → LLM_ANALYZING → ML_INFER → FUSING → REPORT_READY / FAILED
     """
     app.logger.info(f"开始处理作业: {job_id}")
     
@@ -989,7 +989,7 @@ def generate_reports(job):
         if pdf_success:
             job.pdf_report_path = 'report.pdf'
         else:
-            app.logger.warning(f"作业 {job.id} PDF报告生成失败，但HTML报告可用")
+            app.logger.warning(f"作业 {job.id} PDF报告生成失败,但HTML报告可用")
         
         db.session.commit()
         
@@ -1001,102 +1001,64 @@ def generate_reports(job):
         return False
 
 def generate_html_report(job, fusion_result, meta):
-    """生成HTML报告内容"""
-    severity_colors = {
-        'Critical': '#dc3545',
-        'High': '#fd7e14', 
-        'Medium': '#ffc107',
-        'Low': '#28a745'
-    }
-    
-    severity_color = severity_colors.get(fusion_result.get('severity', 'Low'), '#6c757d')
-    
-    html_template = f"""
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能合约安全分析报告 - {meta.get('filename', 'Unknown')}</title>
-    <style>
-        body {{ font-family: 'Arial', sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        .header {{ text-align: center; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }}
-        .title {{ color: #333; font-size: 28px; margin: 0; }}
-        .subtitle {{ color: #666; font-size: 16px; margin: 10px 0; }}
-        .score-section {{ display: flex; justify-content: space-around; margin: 30px 0; }}
-        .score-card {{ text-align: center; padding: 20px; border-radius: 8px; background: #f8f9fa; }}
-        .score-value {{ font-size: 48px; font-weight: bold; color: {severity_color}; }}
-        .score-label {{ font-size: 14px; color: #666; margin-top: 5px; }}
-        .section {{ margin: 30px 0; }}
-        .section-title {{ font-size: 20px; color: #333; border-left: 4px solid #007bff; padding-left: 15px; margin-bottom: 15px; }}
-        .finding {{ background: #f8f9fa; border-left: 4px solid #007bff; padding: 15px; margin: 10px 0; border-radius: 4px; }}
-        .finding-header {{ font-weight: bold; color: #333; }}
-        .finding-details {{ margin-top: 10px; color: #666; }}
-        .meta-info {{ background: #e9ecef; padding: 15px; border-radius: 4px; }}
-        .footer {{ text-align: center; margin-top: 40px; color: #666; font-size: 12px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1 class="title">智能合约安全分析报告</h1>
-            <div class="subtitle">文件: {meta.get('filename', 'Unknown')}</div>
-            <div class="subtitle">作业ID: {job.id}</div>
-            <div class="subtitle">生成时间: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}</div>
-        </div>
-        
-        <div class="score-section">
-            <div class="score-card">
-                <div class="score-value">{fusion_result.get('final_score', 0):.2f}</div>
-                <div class="score-label">风险评分</div>
-            </div>
-            <div class="score-card">
-                <div class="score-value" style="color: {severity_color};">{fusion_result.get('severity', 'Low')}</div>
-                <div class="score-label">严重等级</div>
-            </div>
-            <div class="score-card">
-                <div class="score-value">{fusion_result.get('vulnerability_count', 0)}</div>
-                <div class="score-label">发现问题</div>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2 class="section-title">关键发现</h2>
-            {generate_findings_html(fusion_result.get('top_findings', []))}
-        </div>
-        
-        <div class="section">
-            <h2 class="section-title">分析详情</h2>
-            <div class="meta-info">
-                <p><strong>ML模型概率:</strong> {fusion_result.get('ml_probability', 0):.4f}</p>
-                <p><strong>LLM整体评分:</strong> {fusion_result.get('llm_overall_score', 0):.4f}</p>
-                <p><strong>冲突检测:</strong> {'是' if fusion_result.get('conflict_detected') else '否'}</p>
-                {f"<p><strong>冲突原因:</strong> {fusion_result.get('conflict_reason', '')}</p>" if fusion_result.get('conflict_detected') else ''}
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2 class="section-title">文件信息</h2>
-            <div class="meta-info">
-                <p><strong>业务域:</strong> {meta.get('business_domain', 'N/A')}</p>
-                <p><strong>区块链:</strong> {meta.get('chain', 'N/A')}</p>
-                <p><strong>编译器版本:</strong> {meta.get('compiler_version', 'N/A')}</p>
-                <p><strong>备注:</strong> {meta.get('notes', 'N/A')}</p>
-                <p><strong>上传时间:</strong> {meta.get('upload_time', 'N/A')}</p>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <p>本报告由智能合约安全分析系统自动生成</p>
-            <p>分析引擎版本: SCANA v2.0 | 可追溯ID: {job.id}</p>
-        </div>
-    </div>
-</body>
-</html>
     """
-    
-    return html_template
+    生成HTML报告内容（从静态模板渲染）
+    - 模板文件位置：static/report_template.html
+    - 通过占位符进行替换，保证模板与逻辑分离，便于前端单独维护
+    占位符示例：
+      {{FILENAME}}、{{JOB_ID}}、{{GENERATED_AT}}、{{FINAL_SCORE}}、{{SEVERITY}}、{{VULN_COUNT}}、
+      {{ML_PROB}}、{{LLM_OVERALL}}、{{CONFLICT_DETECTED}}、{{CONFLICT_REASON}}、
+      {{BUSINESS_DOMAIN}}、{{CHAIN}}、{{COMPILER_VERSION}}、{{NOTES}}、{{UPLOAD_TIME}}、
+      {{TOP_FINDINGS_HTML}}
+    """
+    try:
+        template_path = os.path.join('static', 'report_template.html')
+        if not os.path.exists(template_path):
+            raise FileNotFoundError('报告模板文件不存在: static/report_template.html')
+
+        # 生成关键字段
+        generated_at = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        final_score = f"{fusion_result.get('final_score', 0):.2f}"
+        severity = fusion_result.get('severity', 'Low')
+        vuln_count = str(fusion_result.get('vulnerability_count', 0))
+        ml_prob = f"{fusion_result.get('ml_probability', 0):.4f}"
+        llm_overall = f"{fusion_result.get('llm_overall_score', 0):.4f}"
+        conflict_detected = '是' if fusion_result.get('conflict_detected') else '否'
+        conflict_reason = fusion_result.get('conflict_reason', '') or ''
+
+        top_findings_html = generate_findings_html(fusion_result.get('top_findings', []))
+
+        # 读取模板
+        with open(template_path, 'r', encoding='utf-8') as tf:
+            html = tf.read()
+
+        # 安全占位符替换（简单字符串替换，避免引入模板引擎依赖）
+        replacements = {
+            '{{FILENAME}}': meta.get('filename', 'Unknown'),
+            '{{JOB_ID}}': job.id,
+            '{{GENERATED_AT}}': generated_at,
+            '{{FINAL_SCORE}}': final_score,
+            '{{SEVERITY}}': severity,
+            '{{VULN_COUNT}}': vuln_count,
+            '{{ML_PROB}}': ml_prob,
+            '{{LLM_OVERALL}}': llm_overall,
+            '{{CONFLICT_DETECTED}}': conflict_detected,
+            '{{CONFLICT_REASON}}': conflict_reason,
+            '{{BUSINESS_DOMAIN}}': meta.get('business_domain', 'N/A'),
+            '{{CHAIN}}': meta.get('chain', 'N/A'),
+            '{{COMPILER_VERSION}}': meta.get('compiler_version', 'N/A'),
+            '{{NOTES}}': meta.get('notes', 'N/A'),
+            '{{UPLOAD_TIME}}': meta.get('upload_time', 'N/A'),
+            '{{TOP_FINDINGS_HTML}}': top_findings_html,
+        }
+        for k, v in replacements.items():
+            html = html.replace(k, str(v))
+
+        return html
+    except Exception as e:
+        app.logger.error(f"报告模板渲染失败: {e}")
+        # 回退：返回最小可读信息，避免整体失败
+        return f"<html><body><h3>报告生成失败</h3><p>{e}</p></body></html>"
 
 def generate_pdf_report(html_content, pdf_path):
     """
