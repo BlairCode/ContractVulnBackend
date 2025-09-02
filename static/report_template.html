@@ -5,11 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>智能合约安全分析报告 - {{FILENAME}}</title>
   <!--
-    模板通过占位符由后端渲染：
-    {{FILENAME}} {{JOB_ID}} {{GENERATED_AT}} {{FINAL_SCORE}} {{SEVERITY}} {{VULN_COUNT}}
-    {{ML_PROB}} {{LLM_OVERALL}} {{CONFLICT_DETECTED}} {{CONFLICT_REASON}}
-    {{BUSINESS_DOMAIN}} {{CHAIN}} {{COMPILER_VERSION}} {{NOTES}} {{UPLOAD_TIME}}
-    {{TOP_FINDINGS_HTML}}
+    模板通过占位符由后端渲染（generate_html_report）为最终HTML：
+
+    1) 基本信息（来自 uploads/{upload_id}/meta.json 与 Job 字段）
+       - {{FILENAME}}            文件名；来源：meta.filename（示例：MyToken.sol）
+       - {{JOB_ID}}              作业ID；来源：Job.id（示例：2f8adf6e-...）
+       - {{GENERATED_AT}}        报告生成时间（UTC）；来源：后端生成（示例：2025-09-01 12:30:00）
+
+    2) 融合结果指标（来自 uploads/{upload_id}/fusion_result.json）
+       - {{FINAL_SCORE}}         最终融合风险评分[0,1]，保留两位；来源：fusion_result.final_score（示例：0.73）
+       - {{SEVERITY}}            严重性等级；来源：fusion_result.severity（枚举：Critical/High/Medium/Low）
+       - {{VULN_COUNT}}          漏洞发现数量；来源：fusion_result.vulnerability_count（示例：3）
+       - {{ML_PROB}}             机器学习模型输出的漏洞概率[0,1]；来源：fusion_result.ml_probability（示例：0.6123）
+       - {{LLM_OVERALL}}         LLM整体评分[0,1]（按严重性*置信度聚合均值）；来源：fusion_result.llm_overall_score（示例：0.58）
+       - {{CONFLICT_DETECTED}}   是否检测到ML与LLM的冲突（是/否）；来源：fusion_result.conflict_detected（true/false→是/否）
+       - {{CONFLICT_REASON}}     冲突原因说明；来源：fusion_result.conflict_reason（示例："ML概率(0.61)与LLM评分(0.20)差异过大"）
+
+    3) 业务与上下文信息（来自 uploads/{upload_id}/meta.json）
+       - {{BUSINESS_DOMAIN}}     业务域；来源：meta.business_domain（示例：cross_border）
+       - {{CHAIN}}               区块链网络；来源：meta.chain（示例：ethereum/polygon 等）
+       - {{COMPILER_VERSION}}    编译器版本；来源：meta.compiler_version（示例：0.8.19/auto）
+       - {{NOTES}}               用户备注；来源：meta.notes（字符串，可为空）
+       - {{UPLOAD_TIME}}         上传时间（UTC，ISO8601）；来源：meta.upload_time
+
+    4) 关键发现明细（来自 fusion_result.top_findings，经后端拼为HTML片段）
+       - {{TOP_FINDINGS_HTML}}   发现列表HTML片段；来源：generate_findings_html(top_findings)
+         每条发现包含：vuln_type/location/evidence/severity/confidence/suggestion 等字段
+
+    注意：
+    - 所有占位符均以简单字符串替换方式注入，无前端模板引擎依赖；
+    - PDF生成使用 weasyprint→pdfkit 兜底，建议保持样式为内联CSS以确保一致渲染；
+    - 若某字段缺失，后端会回退为友好占位（如 N/A 或空字符串）。
   -->
   <style>
     :root {
@@ -38,7 +64,8 @@
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); text-decoration: none; color: #ffffff; background: var(--primary); font-size: 13px; box-shadow: 0 2px 10px rgba(37,99,235,.25); }
     .btn:hover { filter: brightness(0.95); }
 
-    .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 0; }
+    /* 调整两列宽度：左侧0.9，右侧1.1 增加业务信息面板可用宽度 */
+    .grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 0; }
     .panel { padding: 22px 26px; border-right: 1px solid var(--border); background: var(--panel); }
     .panel:last-child { border-right: none; }
 
@@ -58,13 +85,14 @@
     meter::-webkit-meter-suboptimum-value { background: linear-gradient(90deg, var(--warn), #fbbf24); }
     meter::-webkit-meter-even-less-good-value { background: linear-gradient(90deg, var(--crit), #fb7185); }
 
-    .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; }
-    .meta p { margin: 0; font-size: 13px; color: #334155; }
+    .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+    /* 防止文字溢出面板，允许换行与断词 */
+    .meta p { margin: 0; font-size: 13px; color: #334155; word-break: break-word; overflow-wrap: anywhere; }
 
     .findings { display: grid; gap: 10px; margin-top: 8px; }
     .finding { background: #f8fafc; border: 1px solid var(--border); border-left: 3px solid var(--primary); padding: 12px; border-radius: 8px; }
     .finding .finding-header { color: #111827; font-weight: 600; }
-    .finding .finding-details { margin-top: 8px; color: #374151; font-size: 13px; }
+    .finding .finding-details { margin-top: 8px; color: #374151; font-size: 13px; word-break: break-word; overflow-wrap: anywhere; }
 
     .footer { padding: 18px 26px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; background: #fafafa; }
   </style>

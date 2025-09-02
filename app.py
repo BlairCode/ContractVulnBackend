@@ -592,47 +592,47 @@ LLM_TIMEOUT = int(os.environ.get('LLM_TIMEOUT', '60'))
 LLM_MAX_RETRY = int(os.environ.get('LLM_MAX_RETRY', '3'))
 LLM_MAX_TOKENS = int(os.environ.get('LLM_MAX_TOKENS', '2048'))
 
-# LLM Prompt 设计（精心设计的系统提示、指令、few-shot示例以及JSON Schema，包含跨境贸易合规点）
+# LLM Prompt 设计（精心设计的系统提示、指令、few-shot示例以及JSON Schema，聚焦跨境贸易合规场景）
 LLM_SYSTEM_PROMPT = """
 [系统提示]
-你是资深的区块链智能合约安全审计专家与合规顾问，熟悉 DeFi、NFT、DAO、游戏、跨境贸易等业务场景，精通 Solidity 语言、安全审计方法论、OWASP/SWC/CWE 标准，以及跨境贸易与数据合规（如KYC/AML、数据跨境传输合规点）。你的目标是：
-- 识别并解释智能合约中的潜在安全漏洞与业务风险；
-- 提供专业、可执行的修复建议；
+你是资深的跨境贸易智能合约安全审计专家与合规顾问，熟悉跨境贸易业务逻辑、清关流程、结算与合规（KYC/AML、制裁名单筛查、数据跨境传输与数据最小化要求），精通 Solidity 语言与安全标准（OWASP/SWC/CWE）。
+你的目标：
+- 针对跨境贸易场景识别并解释智能合约中的潜在安全漏洞与合规风险；
+- 提供专业、可执行的修复建议与合规建议；
 - 输出结构化、可被后端解析的 JSON；
-- 在跨境贸易业务域时，指出相关的合规关注点与建议（如KYC、AML、制裁名单筛查、数据最小化与跨境传输要求等）。
+- 在 standard 字段中指向跨境贸易相关合规点（如 KYC、AML、制裁名单、数据跨境传输合规等）。
 
 [指令提示]
 - 严格遵循输出 JSON Schema，不要输出除 JSON 外的内容。
 - 若无法确定，请给出保守判断，并降低置信度。
-- 在 location 字段中尽可能给出函数名与行号范围（若无行号，则以函数名/逻辑块描述）。
-- evidence 请给出能支撑结论的最小代码片段；suggestion 给出操作性措施（如使用某个OpenZeppelin组件、重入保护、访问控制、输入校验等）。
-- standard 字段可指向 SWC/OWASP/CWE 及（如涉及跨境贸易）KYC/AML/数据跨境传输合规点。
+- 在 location 字段中尽可能给出函数名与行号范围。
+- evidence 提供关键最小代码片段；suggestion 给出操作性措施（权限控制、输入校验、ReentrancyGuard、事件审计、分离结算与业务逻辑等）。
 
 [输出 JSON Schema]
 严格按照以下 JSON Schema 输出，如有多个发现请输出 JSON 数组：
 [
   {
     "vuln_type": "字符串，漏洞类型（如 Reentrancy、Access Control、Integer Overflow 等）",
-    "location": "字符串，函数名与(或)行号范围（如 withdraw(): L40-L65）",
+    "location": "字符串，函数名与/或行号范围（如 settle(): L40-L65）",
     "evidence": "字符串，最小可支持的代码片段或关键语句",
     "severity": "枚举：Critical|High|Medium|Low",
     "confidence": "0.0-1.0 的字符串或数值，代表置信度",
-    "suggestion": "字符串，工程化修复建议（如引入ReentrancyGuard/使用CEI模式/严格权限控制/输入上下限校验等）",
-    "standard": "字符串，适用标准或合规要求（如 SWC-107 / CWE-841 / OWASP / KYC / AML / 数据跨境合规点）",
+    "suggestion": "字符串，工程化修复建议（如使用ReentrancyGuard/严格权限控制/额度与限额校验/可追溯事件日志）",
+    "standard": "字符串，适用标准或合规要求（SWC/CWE/OWASP/KYC/AML/制裁名单筛查/数据跨境合规点）",
     "cwe_id": "字符串，可选，如 CWE-841",
-    "impact": "字符串，潜在影响描述（如资金被盗、拒绝服务、逻辑绕过等）"
+    "impact": "字符串，潜在影响描述（如资金被盗、拒付、制裁风险、数据违规传输等）"
   }
 ]
 
 [few-shot 示例]
 示例输入（节选）：
-contract Vulnerable {
-    mapping(address => uint256) balances;
-    function withdraw(uint256 amount) public {
-        require(balances[msg.sender] >= amount);
+contract Settlement {
+    mapping(address => uint256) balance;
+    function withdraw(uint256 amount) external {
+        require(balance[msg.sender] >= amount, "insufficient");
         (bool ok,) = msg.sender.call{value: amount}("");
         require(ok);
-        balances[msg.sender] -= amount;
+        balance[msg.sender] -= amount;
     }
 }
 
@@ -640,19 +640,20 @@ contract Vulnerable {
 [
   {
     "vuln_type": "Reentrancy",
-    "location": "withdraw(): L3-L9",
-    "evidence": "外部调用 call{value: amount} 在状态更新之前执行",
+    "location": "withdraw(): L4-L9",
+    "evidence": "外部调用 call{value: amount} 在状态更新之前执行，且缺少重入保护",
     "severity": "Critical",
     "confidence": "0.95",
-    "suggestion": "采用检查-效果-交互(CEI)模式或使用ReentrancyGuard；将状态更新放在外部调用前",
-    "standard": "SWC-107, OWASP Smart Contract Top 10",
+    "suggestion": "采用CEI模式或使用ReentrancyGuard；对大额提现增加额度/限额校验并记录审计事件",
+    "standard": "SWC-107, KYC/AML(提现风控), OWASP Smart Contract Top 10",
     "cwe_id": "CWE-841",
-    "impact": "攻击者可通过重入重复提币，导致资金被盗"
+    "impact": "攻击者可重入导致资金被盗，跨境结算存在洗钱与违规转移风险"
   }
 ]
 
 [开始分析]
-请基于上述要求分析以下Solidity代码："""
+请基于跨境贸易合规场景分析以下Solidity代码：
+"""
 
 # LLM 调用函数，带重试和超时
 
@@ -1620,39 +1621,25 @@ def get_config():
     try:
         config = {
             'slice_kinds': [
-                {'value': 'full', 'label': '完整合约', 'description': '分析整个合约文件'},
-                {'value': 'function', 'label': '函数级别', 'description': '按函数进行分析'},
-                {'value': 'statement', 'label': '语句级别', 'description': '按语句进行分析'}
+                {'value': 'full', 'label': '完整合约', 'description': '分析整个合约文件'}
             ],
             'llm_models': [
-                {'value': 'deepseek', 'label': 'DeepSeek', 'description': 'DeepSeek 大语言模型'},
-                {'value': 'gpt-4', 'label': 'GPT-4', 'description': 'OpenAI GPT-4 模型（需配置）'},
-                {'value': 'claude', 'label': 'Claude', 'description': 'Anthropic Claude 模型（需配置）'}
+                {'value': 'deepseek', 'label': 'DeepSeek', 'description': 'DeepSeek 大语言模型'}
             ],
             'business_domains': [
-                {'value': 'defi', 'label': 'DeFi', 'description': '去中心化金融'},
-                {'value': 'nft', 'label': 'NFT', 'description': '非同质化代币'},
-                {'value': 'dao', 'label': 'DAO', 'description': '去中心化自治组织'},
-                {'value': 'gaming', 'label': '游戏', 'description': '区块链游戏'},
-                {'value': 'cross_border', 'label': '跨境贸易', 'description': '跨境贸易合规'},
-                {'value': 'other', 'label': '其他', 'description': '其他业务场景'}
+                {'value': 'cross_border', 'label': '跨境贸易', 'description': '跨境贸易合规与安全审计'}
             ],
             'chains': [
                 {'value': 'ethereum', 'label': 'Ethereum', 'description': '以太坊主网'},
                 {'value': 'bsc', 'label': 'BSC', 'description': '币安智能链'},
                 {'value': 'polygon', 'label': 'Polygon', 'description': 'Polygon 网络'},
                 {'value': 'arbitrum', 'label': 'Arbitrum', 'description': 'Arbitrum Layer2'},
-                {'value': 'optimism', 'label': 'Optimism', 'description': 'Optimism Layer2'},
-                {'value': 'other', 'label': '其他', 'description': '其他区块链网络'}
+                {'value': 'optimism', 'label': 'Optimism', 'description': 'Optimism Layer2'}
             ],
             'compiler_versions': [
                 {'value': '0.8.19', 'label': 'Solidity 0.8.19'},
                 {'value': '0.8.18', 'label': 'Solidity 0.8.18'},
                 {'value': '0.8.17', 'label': 'Solidity 0.8.17'},
-                {'value': '0.8.16', 'label': 'Solidity 0.8.16'},
-                {'value': '0.8.15', 'label': 'Solidity 0.8.15'},
-                {'value': '0.7.x', 'label': 'Solidity 0.7.x'},
-                {'value': '0.6.x', 'label': 'Solidity 0.6.x'},
                 {'value': 'auto', 'label': '自动检测'}
             ],
             'system_info': {
@@ -1773,7 +1760,8 @@ def upload_contract():
     meta = {
         'upload_id': upload_id,
         'filename': file.filename,
-        'business_domain': request.form.get('business_domain', ''),
+
+        'business_domain': 'cross_border',
         'chain': request.form.get('chain', ''),
         'compiler_version': request.form.get('compiler_version', ''),
         'notes': request.form.get('notes', ''),
