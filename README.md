@@ -1,47 +1,3 @@
-# 合约安全分析后端（跨境贸易专用）
-
-跨境贸易场景（cross_border）下的 Solidity 智能合约安全分析后端。采用 DeepSeek LLM + 本地 ML 模型（BLSTM+Attention）双引擎，自动融合并生成 HTML/PDF 报告。
-
-## 快速开始（开发者）
-
-1) 创建与激活环境
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-2) 准备模型文件（必需）
-```
-model/w2v/checkpoints/blstm_epoch470.pt
-model/w2v/checkpoints/sg_epoch1700.pt
-```
-
-3) 配置环境变量（二选一）
-- 方式A：使用 .env（推荐，在 app.py 顶部可 load_dotenv()）
-```bash
-# 必需
-LLM_API_KEY=your_deepseek_api_key
-SECRET_KEY=your_secret_key_here
-# 可选
-LLM_API_ENDPOINT=https://api.deepseek.com/v1/chat/completions
-LLM_TIMEOUT=60
-LLM_MAX_RETRY=3
-LLM_MAX_TOKENS=2048
-DATABASE_URL=sqlite:///scana.db
-```
-- 方式B：直接 export
-```bash
-export LLM_API_KEY=your_deepseek_api_key
-export SECRET_KEY=your_secret_key_here
-```
-
-4) 启动
-```bash
-python app.py
-# 服务: http://localhost:8000
-```
-
 ## 依赖
 - Python 包：Flask, SQLAlchemy, Flask-CORS, requests, torch, weasyprint, pdfkit
 - 系统库（二选一）
@@ -61,8 +17,6 @@ python app.py
 - 报告查看/下载
   - GET `/api/reports/{job_id}.html`
   - GET `/api/reports/{job_id}.pdf`
-- 配置查询（仅跨境贸易）
-  - GET `/api/config`  （business_domains 仅 `cross_border`）
 
 ## 产物结构（uploads/{upload_id}/）
 - `meta.json`：上传元信息（filename、chain、compiler_version、notes、upload_time）
@@ -74,7 +28,7 @@ python app.py
 - `report.html`：最终报告（模板：`static/report_template.html`）
 - `report.pdf`：PDF 报告（weasyprint 优先，pdfkit 兜底）
 
-## 处理流程（跨境贸易-only）
+## 处理流程
 1. 上传合约（自动 LLM 初判保存为 llm_result.json）
 2. 创建作业：PREPROCESSING → LLM_ANALYZING → ML_INFER → FUSING → REPORT_READY
 3. 融合：final_score = α·ML_prob + β·LLM_overall + γ·issue_aggregation（默认 α=0.4, β=0.4, γ=0.2）
@@ -106,6 +60,3 @@ curl -O http://localhost:8000/api/reports/{job_id}.pdf
 
 ## 注意
 - LLM_API_KEY 未配置时，LLM 初判会失败（流程仍可继续，但融合与报告信息受限）
-- 模板为浅色专业风，报告页头提供“下载PDF”按钮
-- 仅支持跨境贸易业务域（cross_border），其他业务域不在本项目范围内
-
