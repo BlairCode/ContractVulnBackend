@@ -415,10 +415,11 @@ JOB_STATES = {
 
 # 融合算法配置
 FUSION_CONFIG = {
-    'alpha': 0.4,  # ML概率权重
-    'beta': 0.4,   # LLM整体评分权重
-    'gamma': 0.2,  # 问题聚合权重
-    'conflict_threshold': 0.3,  # 冲突检测阈值
+    # 场景：跨境贸易权重
+    'alpha': 0.35,  # ML概率权重
+    'beta': 0.45,   # LLM整体评分权重
+    'gamma': 0.20,  # 问题聚合权重
+    'conflict_threshold': 0.28,  # 冲突检测阈值
     'severity_thresholds': {  # 严重性映射阈值
         'Critical': 0.8,
         'High': 0.6,
@@ -516,11 +517,17 @@ def fuse_llm_ml_results(llm_result, ml_result):
         # 问题聚合评分（基于问题数量）
         issue_aggregation = min(issue_count * 0.1, 1.0)
         
+        # 固定使用跨境贸易权重（唯一场景）
+        alpha = FUSION_CONFIG['alpha']
+        beta = FUSION_CONFIG['beta']
+        gamma = FUSION_CONFIG['gamma']
+        conflict_threshold = FUSION_CONFIG['conflict_threshold']
+
         # 融合计算：final_score = α*ML_prob + β*LLM_overall + γ*issue_aggregation
         final_score = (
-            FUSION_CONFIG['alpha'] * ml_prob +
-            FUSION_CONFIG['beta'] * llm_overall +
-            FUSION_CONFIG['gamma'] * issue_aggregation
+            alpha * ml_prob +
+            beta * llm_overall +
+            gamma * issue_aggregation
         )
         final_score = min(final_score, 1.0)
         
@@ -533,7 +540,7 @@ def fuse_llm_ml_results(llm_result, ml_result):
                 break
         
         # 冲突检测
-        conflict_detected = abs(ml_prob - llm_overall) > FUSION_CONFIG['conflict_threshold']
+        conflict_detected = abs(ml_prob - llm_overall) > conflict_threshold
         
         # 支持证据收集
         supporting_evidence = []
@@ -566,9 +573,9 @@ def fuse_llm_ml_results(llm_result, ml_result):
             'top_findings': top_findings,
             'supporting_evidence': supporting_evidence,
             'fusion_metadata': {
-                'alpha': FUSION_CONFIG['alpha'],
-                'beta': FUSION_CONFIG['beta'], 
-                'gamma': FUSION_CONFIG['gamma'],
+                'alpha': alpha,
+                'beta': beta, 
+                'gamma': gamma,
                 'timestamp': datetime.utcnow().isoformat()
             }
         }
@@ -657,11 +664,18 @@ contract Settlement {
 
 # LLM 调用函数，带重试和超时
 
-def call_deepseek_llm(code):
+def call_deepseek_llm(code, stage='precheck'):
     """
-    调用 deepseek LLM API,对合约代码进行初步漏洞分析。
+    调用 deepseek LLM API,对合约代码进行漏洞分析（多阶段）。
     返回 LLM 的 JSON 结果字符串，失败时返回空字符串。
     """
+    # 多阶段系统提示（围绕跨境贸易领域）
+    STAGE_TO_PROMPT = {
+        'precheck': LLM_SYSTEM_PROMPT,
+        'deep_audit': LLM_SYSTEM_PROMPT + "\n[阶段加成]请在更严格的审计强度下，结合重入/访问控制/授权绕过/资产冻结与释放、清算与结算路径等高危风险，输出更完整的问题集合。",
+        'compliance': LLM_SYSTEM_PROMPT + "\n[阶段加成]聚焦跨境贸易合规：KYC/AML、受制裁名单、地域与数据跨境传输限制、资金来源合规、额度与限额合规、可追溯与审计日志等，输出合规模块专项发现。"
+    }
+    system_prompt = STAGE_TO_PROMPT.get(stage, LLM_SYSTEM_PROMPT)
     headers = {
         'Authorization': f'Bearer {LLM_API_KEY}',
         'Content-Type': 'application/json'
@@ -669,7 +683,7 @@ def call_deepseek_llm(code):
     payload = {
         'model': 'deepseek-chat',  # deepseek 官方模型名，可根据实际情况调整
         'messages': [
-            {'role': 'system', 'content': LLM_SYSTEM_PROMPT},
+            {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': code}
         ],
         'max_tokens': LLM_MAX_TOKENS,
@@ -849,15 +863,40 @@ def perform_llm_analysis(job):
         with open(source_path, 'r', encoding='utf-8', errors='ignore') as f:
             code = f.read()
             
-        llm_result = call_deepseek_llm(code)
+        # 多阶段策略：先预筛选，再针对跨境合规进行专项，再进行深度审计
+        stages = ['precheck', 'compliance', 'deep_audit']
+        merged = []
+        for st in stages:
+            st_result = call_deepseek_llm(code, stage=st)
+            if not st_result:
+                continue
+            try:
+                items = json.loads(st_result)
+                if isinstance(items, list):
+                    merged.extend(items)
+                elif isinstance(items, dict):
+                    merged.append(items)
+                else:
+                    # 不可解析则忽略该阶段
+                    pass
+            except Exception:
+                # 返回非JSON时忽略该阶段（保持健壮性）
+                continue
+
+        # 若多阶段均失败，回退一次单阶段
+        if not merged:
+            fallback = call_deepseek_llm(code, stage='precheck')
+            try:
+                merged = json.loads(fallback) if fallback else []
+                if isinstance(merged, dict):
+                    merged = [merged]
+            except Exception:
+                merged = []
         if not llm_result:
             return False
             
         # 保存LLM结果
-        try:
-            llm_json = json.loads(llm_result)
-        except:
-            llm_json = llm_result
+        llm_json = merged
             
         with open(llm_result_path, 'w', encoding='utf-8') as f:
             json.dump(llm_json, f, ensure_ascii=False, indent=2)
@@ -1001,6 +1040,108 @@ def generate_reports(job):
         app.logger.error(f"报告生成失败: {e}")
         return False
 
+@app.route('/api/reports/sample', methods=['POST'])
+def generate_sample_report():
+    """
+    生成一份示例报告（用于汇报/演示），领域限定为跨境贸易。
+    - 自动创建临时 upload_id 目录
+    - 生成 demo 的 fusion_result.json 与 meta.json
+    - 渲染 HTML 与 PDF
+    - 返回生成的相对路径
+    """
+    try:
+        upload_id = str(uuid.uuid4())
+        upload_dir = os.path.join(app.config['UPLOADS_FOLDER'], upload_id)
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # 示例 meta（跨境贸易）
+        meta = {
+            'upload_id': upload_id,
+            'filename': 'CrossBorderSettlement.sol',
+            'business_domain': 'cross_border',
+            'chain': 'ethereum',
+            'compiler_version': '0.8.19',
+            'notes': '示例报告：跨境贸易清结算合约',
+            'upload_time': datetime.utcnow().isoformat()
+        }
+        with open(os.path.join(upload_dir, 'meta.json'), 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        # 示例融合结果（体现 LLM + ML 融合）
+        fusion_result = {
+            'final_score': 0.73,
+            'severity': 'High',
+            'vulnerability_count': 3,
+            'ml_probability': 0.68,
+            'llm_overall_score': 0.76,
+            'conflict_detected': False,
+            'conflict_reason': None,
+            'top_findings': [
+                {
+                    'vuln_type': 'Reentrancy',
+                    'location': 'withdraw(): L42-L70',
+                    'evidence': 'call{value: amount} 在状态更新之前执行',
+                    'severity': 'Critical',
+                    'confidence': 0.92,
+                    'suggestion': '采用CEI/加 ReentrancyGuard；提现额度风控与审计事件',
+                    'standard': 'SWC-107, KYC/AML(提现风控)'
+                },
+                {
+                    'vuln_type': 'Access Control',
+                    'location': 'settle(): L10-L38',
+                    'evidence': '管理操作缺少 onlyOwner/角色控制',
+                    'severity': 'High',
+                    'confidence': 0.81,
+                    'suggestion': '基于角色的严格权限；多签审批',
+                    'standard': 'OWASP, 合规审批链'
+                },
+                {
+                    'vuln_type': 'Compliance-KYC/AML',
+                    'location': 'transfer(): L85-L110',
+                    'evidence': '未对收/付款方进行KYC与制裁名单校验',
+                    'severity': 'Medium',
+                    'confidence': 0.78,
+                    'suggestion': '集成KYC/AML与制裁名单服务；限制高风险地域',
+                    'standard': 'KYC/AML, Sanction Screening'
+                }
+            ],
+            'supporting_evidence': [],
+            'fusion_metadata': {
+                'alpha': 0.35,
+                'beta': 0.45,
+                'gamma': 0.2,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        }
+        with open(os.path.join(upload_dir, 'fusion_result.json'), 'w', encoding='utf-8') as f:
+            json.dump(fusion_result, f, ensure_ascii=False, indent=2)
+
+        # 构造虚拟 Job 对象用于渲染（最小字段）
+        class _J: pass
+        job = _J()
+        job.id = str(uuid.uuid4())
+        job.upload_id = upload_id
+        job.fusion_result_path = 'fusion_result.json'
+
+        # 生成报告
+        html_content = generate_html_report(job, fusion_result, meta)
+        html_report_path = os.path.join(upload_dir, 'report.html')
+        with open(html_report_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+
+        pdf_report_path = os.path.join(upload_dir, 'report.pdf')
+        _ = generate_pdf_report(html_content, pdf_report_path)
+
+        return jsonify({
+            'message': '示例报告已生成',
+            'upload_id': upload_id,
+            'html_report_path': f'{upload_id}/report.html',
+            'pdf_report_path': f'{upload_id}/report.pdf'
+        }), 201
+    except Exception as e:
+        app.logger.error(f"示例报告生成失败: {e}")
+        return jsonify({'error': f'示例报告生成失败: {str(e)}'}), 500
+
 def generate_html_report(job, fusion_result, meta):
     """
     生成HTML报告内容（从静态模板渲染）
@@ -1089,165 +1230,11 @@ def generate_pdf_with_weasyprint(html_content, pdf_path):
     try:
         # 创建HTML对象
         html = HTML(string=html_content)
-        
-        # 添加CSS样式优化
-        css_content = """
-        @page {
-            size: A4;
-            margin: 1cm;
-            @top-center {
-                content: "智能合约安全分析报告";
-                font-size: 10pt;
-                color: #666;
-            }
-            @bottom-center {
-                content: "第 " counter(page) " 页，共 " counter(pages) " 页";
-                font-size: 10pt;
-                color: #666;
-            }
-        }
-        
-        body {
-            font-family: 'Arial', 'SimSun', sans-serif;
-            line-height: 1.6;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 100%;
-            margin: 0;
-            padding: 20px;
-        }
-        
-        .header {
-            text-align: center;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-            page-break-after: avoid;
-        }
-        
-        .title {
-            color: #333;
-            font-size: 24px;
-            margin: 0;
-            page-break-after: avoid;
-        }
-        
-        .subtitle {
-            color: #666;
-            font-size: 14px;
-            margin: 5px 0;
-        }
-        
-        .score-section {
-            display: flex;
-            justify-content: space-around;
-            margin: 30px 0;
-            page-break-inside: avoid;
-        }
-        
-        .score-card {
-            text-align: center;
-            padding: 15px;
-            border-radius: 8px;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            flex: 1;
-            margin: 0 10px;
-        }
-        
-        .score-value {
-            font-size: 36px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .score-label {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .section {
-            margin: 25px 0;
-            page-break-inside: avoid;
-        }
-        
-        .section-title {
-            font-size: 18px;
-            color: #333;
-            border-left: 4px solid #007bff;
-            padding-left: 15px;
-            margin-bottom: 15px;
-            page-break-after: avoid;
-        }
-        
-        .finding {
-            background: #f8f9fa;
-            border-left: 4px solid #007bff;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 4px;
-            page-break-inside: avoid;
-        }
-        
-        .finding-header {
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 10px;
-        }
-        
-        .finding-details p {
-            margin: 5px 0;
-            font-size: 12px;
-        }
-        
-        .meta-info {
-            background: #e9ecef;
-            padding: 15px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        
-        .meta-info p {
-            margin: 5px 0;
-        }
-        
-        .footer {
-            text-align: center;
-            margin-top: 40px;
-            color: #666;
-            font-size: 10px;
-            page-break-before: avoid;
-        }
-        
-        /* 分页优化 */
-        .page-break {
-            page-break-before: always;
-        }
-        
-        /* 表格样式 */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 12px;
-        }
-        
-        th, td {
-            border: 1px solid #dee2e6;
-            padding: 8px;
-            text-align: left;
-        }
-        
-        th {
-            background-color: #f8f9fa;
-            font-weight: bold;
-        }
-        """
-        
-        css = CSS(string=css_content)
-        
+
+        # 从静态文件加载CSS（职责分离）
+        css_path = os.path.join('static', 'report.css')
+        css = CSS(filename=css_path)
+
         # 生成PDF
         html.write_pdf(pdf_path, stylesheets=[css])
         

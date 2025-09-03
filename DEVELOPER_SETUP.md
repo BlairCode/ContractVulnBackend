@@ -111,9 +111,3 @@ sudo apt-get install libcairo2 libpango-1.0-0 libpangocairo-1.0-0 wkhtmltopdf
 - `model/w2v/checkpoints/blstm_epoch470.pt`
 - `model/w2v/checkpoints/sg_epoch1700.pt`
 
-## 开发建议
-
-1. 使用虚拟环境隔离依赖
-2. 定期更新 requirements.txt
-3. 查看 logs/ 目录了解运行状态
-4. 使用 API_USAGE.md 了解接口用法

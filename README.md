@@ -17,6 +17,7 @@
 - 报告查看/下载
   - GET `/api/reports/{job_id}.html`
   - GET `/api/reports/{job_id}.pdf`
+  - POST `/api/reports/sample` （生成跨境贸易示例报告，返回路径）
 
 ## 产物结构（uploads/{upload_id}/）
 - `meta.json`：上传元信息（filename、chain、compiler_version、notes、upload_time）
@@ -26,13 +27,13 @@
 - `ml_result.json`：ML 推理
 - `fusion_result.json`：融合结果（final_score、severity、top_findings 等）
 - `report.html`：最终报告（模板：`static/report_template.html`）
-- `report.pdf`：PDF 报告（weasyprint 优先，pdfkit 兜底）
+- `report.pdf`：PDF 报告（WeasyPrint 优先，pdfkit 兜底；样式：`static/report.css`）
 
-## 处理流程
-1. 上传合约（自动 LLM 初判保存为 llm_result.json）
-2. 创建作业：PREPROCESSING → LLM_ANALYZING → ML_INFER → FUSING → REPORT_READY
-3. 融合：final_score = α·ML_prob + β·LLM_overall + γ·issue_aggregation（默认 α=0.4, β=0.4, γ=0.2）
-4. 报告：基于 `static/report_template.html` 渲染 HTML，再生成 PDF
+## 处理流程（跨境贸易场景）
+1. 上传合约：自动触发 LLM 初判，保存 `llm_result.json`
+2. 创建作业：PREPROCESSING → LLM_ANALYZING（多阶段：precheck → compliance → deep_audit，聚合结果） → ML_INFER → FUSING → REPORT_READY
+3. 融合（固定跨境贸易权重）：final_score = α·ML_prob + β·LLM_overall + γ·issue_aggregation（α=0.35, β=0.45, γ=0.20；冲突阈=0.28）
+4. 报告：基于 `static/report_template.html` 渲染 HTML，使用 `static/report.css` 生成 PDF（WeasyPrint 优先，pdfkit 兜底）
 
 ## 最小验证
 ```bash
@@ -56,6 +57,9 @@ curl http://localhost:8000/api/jobs/{job_id}
 # 4) 查看/下载报告
 curl http://localhost:8000/api/reports/{job_id}.html
 curl -O http://localhost:8000/api/reports/{job_id}.pdf
+
+# 5) 生成示例报告（跨境贸易演示）
+curl -X POST http://localhost:8000/api/reports/sample
 ```
 
 ## 注意

@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>智能合约安全分析报告 - {{FILENAME}}</title>
-  <!--
+    <!--
     模板通过占位符由后端渲染（generate_html_report）为最终HTML：
 
     1) 基本信息（来自 uploads/{upload_id}/meta.json 与 Job 字段）
@@ -37,9 +36,9 @@
     - PDF生成使用 weasyprint→pdfkit 兜底，建议保持样式为内联CSS以确保一致渲染；
     - 若某字段缺失，后端会回退为友好占位（如 N/A 或空字符串）。
   -->
+  <title>智能合约安全分析报告 - {{FILENAME}}</title>
   <style>
     :root {
-      /* 浅色主题配色 */
       --bg: #f7f9fc;
       --panel: #ffffff;
       --panel-2: #ffffff;
@@ -60,17 +59,45 @@
     .title { font-size: 26px; margin: 0 0 6px; letter-spacing: .2px; }
     .subtitle { margin: 2px 0; color: var(--muted); font-size: 13px; }
 
-    .toolbar { display: flex; gap: 12px; margin-top: 12px; }
-    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); text-decoration: none; color: #ffffff; background: var(--primary); font-size: 13px; box-shadow: 0 2px 10px rgba(37,99,235,.25); }
+    .toolbar { 
+      display: flex; 
+      gap: 12px; 
+      margin-top: 12px;
+      align-items: center; 
+    }
+    .btn { 
+      display: inline-flex; 
+      align-items: center; 
+      gap: 8px; 
+      padding: 8px 14px; 
+      border-radius: 8px; 
+      border: 1px solid var(--border); 
+      text-decoration: none; 
+      color: #ffffff; 
+      background: var(--primary); 
+      font-size: 13px; 
+      box-shadow: 0 2px 10px rgba(37,99,235,.25);
+      height: fit-content;
+    }
     .btn:hover { filter: brightness(0.95); }
 
-    /* 调整两列宽度：左侧0.9，右侧1.1 增加业务信息面板可用宽度 */
+    .chip { 
+      display: inline-flex; 
+      align-items: center;
+      padding: 6px 10px; 
+      border-radius: 999px; 
+      font-size: 12px; 
+      border: 1px solid var(--border); 
+      color: var(--muted); 
+      background: #f8fafc;
+      height: fit-content;
+    }
+
     .grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 0; }
     .panel { padding: 22px 26px; border-right: 1px solid var(--border); background: var(--panel); }
     .panel:last-child { border-right: none; }
 
     .section-title { display: flex; align-items: center; gap: 10px; font-size: 16px; margin: 0 0 14px; color: #111827; }
-    .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); color: var(--muted); background: #f8fafc; }
 
     .kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 6px; }
     .kpi-card { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 14px; box-shadow: 0 1px 0 rgba(0,0,0,.03) inset; }
