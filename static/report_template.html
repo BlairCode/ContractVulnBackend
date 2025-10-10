@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+    模板通过占位符由后端渲染（generate_html_report）为最终HTML：
+
+    1) 基本信息（来自 uploads/{upload_id}/meta.json 与 Job 字段）
+       - {{FILENAME}}            文件名；来源：meta.filename（示例：MyToken.sol）
+       - {{JOB_ID}}              作业ID；来源：Job.id（示例：2f8adf6e-...）
+       - {{GENERATED_AT}}        报告生成时间（UTC）；来源：后端生成（示例：2025-09-01 12:30:00）
+
+    2) 融合结果指标（来自 uploads/{upload_id}/fusion_result.json）
+       - {{FINAL_SCORE}}         最终融合风险评分[0,1]，保留两位；来源：fusion_result.final_score（示例：0.73）
+       - {{SEVERITY}}            严重性等级；来源：fusion_result.severity（枚举：Critical/High/Medium/Low）
+       - {{VULN_COUNT}}          漏洞发现数量；来源：fusion_result.vulnerability_count（示例：3）
+       - {{ML_PROB}}             机器学习模型输出的漏洞概率[0,1]；来源：fusion_result.ml_probability（示例：0.6123）
+       - {{LLM_OVERALL}}         LLM整体评分[0,1]（按严重性*置信度聚合均值）；来源：fusion_result.llm_overall_score（示例：0.58）
+       - {{CONFLICT_DETECTED}}   是否检测到ML与LLM的冲突（是/否）；来源：fusion_result.conflict_detected（true/false→是/否）
+       - {{CONFLICT_REASON}}     冲突原因说明；来源：fusion_result.conflict_reason（示例："ML概率(0.61)与LLM评分(0.20)差异过大"）
+
+    3) 业务与上下文信息（来自 uploads/{upload_id}/meta.json）
+       - {{BUSINESS_DOMAIN}}     业务域；来源：meta.business_domain（示例：cross_border）
+       - {{CHAIN}}               区块链网络；来源：meta.chain（示例：ethereum/polygon 等）
+       - {{COMPILER_VERSION}}    编译器版本；来源：meta.compiler_version（示例：0.8.19/auto）
+       - {{NOTES}}               用户备注；来源：meta.notes（字符串，可为空）
+       - {{UPLOAD_TIME}}         上传时间（UTC，ISO8601）；来源：meta.upload_time
+
+    4) 关键发现明细（来自 fusion_result.top_findings，经后端拼为HTML片段）
+       - {{TOP_FINDINGS_HTML}}   发现列表HTML片段；来源：generate_findings_html(top_findings)
+         每条发现包含：vuln_type/location/evidence/severity/confidence/suggestion 等字段
+
+    注意：
+    - 所有占位符均以简单字符串替换方式注入，无前端模板引擎依赖；
+    - PDF生成使用 weasyprint→pdfkit 兜底，建议保持样式为内联CSS以确保一致渲染；
+    - 若某字段缺失，后端会回退为友好占位（如 N/A 或空字符串）。
+  -->
+  <title>智能合约安全分析报告 - {{FILENAME}}</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --panel: #ffffff;
+      --panel-2: #ffffff;
+      --text: #0f172a;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --accent: #06b6d4;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --crit: #dc2626;
+      --border: #e5e7eb;
+      --shadow: 0 8px 24px rgba(15,23,42,.08);
+    }
+    html, body { background: var(--bg); color: var(--text); }
+    body { font-family: Inter, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; margin: 0; padding: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+    .header { padding: 24px 28px; border-bottom: 1px solid var(--border); background: radial-gradient(1200px 600px at 10% -20%, rgba(37,99,235,.09), transparent), radial-gradient(1200px 600px at 110% -30%, rgba(6,182,212,.08), transparent); }
+    .title { font-size: 26px; margin: 0 0 6px; letter-spacing: .2px; }
+    .subtitle { margin: 2px 0; color: var(--muted); font-size: 13px; }
+
+    .toolbar { 
+      display: flex; 
+      gap: 12px; 
+      margin-top: 12px;
+      align-items: center; 
+    }
+    .btn { 
+      display: inline-flex; 
+      align-items: center; 
+      gap: 8px; 
+      padding: 8px 14px; 
+      border-radius: 8px; 
+      border: 1px solid var(--border); 
+      text-decoration: none; 
+      color: #ffffff; 
+      background: var(--primary); 
+      font-size: 13px; 
+      box-shadow: 0 2px 10px rgba(37,99,235,.25);
+      height: fit-content;
+    }
+    .btn:hover { filter: brightness(0.95); }
+
+    .chip { 
+      display: inline-flex; 
+      align-items: center;
+      padding: 6px 10px; 
+      border-radius: 999px; 
+      font-size: 12px; 
+      border: 1px solid var(--border); 
+      color: var(--muted); 
+      background: #f8fafc;
+      height: fit-content;
+    }
+
+    .grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 0; }
+    .panel { padding: 22px 26px; border-right: 1px solid var(--border); background: var(--panel); }
+    .panel:last-child { border-right: none; }
+
+    .section-title { display: flex; align-items: center; gap: 10px; font-size: 16px; margin: 0 0 14px; color: #111827; }
+
+    .kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 6px; }
+    .kpi-card { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 14px; box-shadow: 0 1px 0 rgba(0,0,0,.03) inset; }
+    .kpi-label { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .kpi-value { font-size: 28px; font-weight: 700; letter-spacing: .2px; color: #0b1324; }
+
+    .meter-group { margin-top: 16px; display: grid; gap: 12px; }
+    .meter-row { display: grid; grid-template-columns: 170px 1fr 60px; align-items: center; gap: 12px; }
+    meter { width: 100%; height: 14px; }
+    meter::-webkit-meter-bar { background: #eef2ff; border-radius: 999px; }
+    meter::-webkit-meter-optimum-value { background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: 999px; }
+    meter::-webkit-meter-suboptimum-value { background: linear-gradient(90deg, var(--warn), #fbbf24); }
+    meter::-webkit-meter-even-less-good-value { background: linear-gradient(90deg, var(--crit), #fb7185); }
+
+    .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+    /* 防止文字溢出面板，允许换行与断词 */
+    .meta p { margin: 0; font-size: 13px; color: #334155; word-break: break-word; overflow-wrap: anywhere; }
+
+    .findings { display: grid; gap: 10px; margin-top: 8px; }
+    .finding { background: #f8fafc; border: 1px solid var(--border); border-left: 3px solid var(--primary); padding: 12px; border-radius: 8px; }
+    .finding .finding-header { color: #111827; font-weight: 600; }
+    .finding .finding-details { margin-top: 8px; color: #374151; font-size: 13px; word-break: break-word; overflow-wrap: anywhere; }
+
+    .footer { padding: 18px 26px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="title">智能合约安全分析报告</h1>
+      <div class="subtitle">文件：{{FILENAME}}</div>
+      <div class="subtitle">作业ID：{{JOB_ID}} ｜ 生成时间：{{GENERATED_AT}}</div>
+      <div class="toolbar">
+        <a class="btn" href="/api/reports/{{JOB_ID}}.pdf" download>下载PDF报告</a>
+        <span class="chip">报告版本 v2.0</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h3 class="section-title">总体结论</h3>
+        <div class="kpi">
+          <div class="kpi-card">
+            <div class="kpi-label">风险评分</div>
+            <div class="kpi-value">{{FINAL_SCORE}}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">严重等级</div>
+            <div class="kpi-value">{{SEVERITY}}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">发现问题</div>
+            <div class="kpi-value">{{VULN_COUNT}}</div>
+          </div>
+        </div>
+
+        <div class="meter-group">
+          <div class="meter-row">
+            <div class="kpi-label">融合最终评分</div>
+            <meter min="0" max="1" value="{{FINAL_SCORE}}"></meter>
+            <div class="kpi-label">{{FINAL_SCORE}}</div>
+          </div>
+          <div class="meter-row">
+            <div class="kpi-label">ML 模型概率</div>
+            <meter min="0" max="1" value="{{ML_PROB}}"></meter>
+            <div class="kpi-label">{{ML_PROB}}</div>
+          </div>
+          <div class="meter-row">
+            <div class="kpi-label">LLM 整体评分</div>
+            <meter min="0" max="1" value="{{LLM_OVERALL}}"></meter>
+            <div class="kpi-label">{{LLM_OVERALL}}</div>
+          </div>
+        </div>
+
+        <h3 class="section-title" style="margin-top:18px;">冲突检测</h3>
+        <p class="subtitle">是否存在冲突：<strong>{{CONFLICT_DETECTED}}</strong></p>
+        <p class="subtitle">冲突原因：{{CONFLICT_REASON}}</p>
+      </div>
+
+      <div class="panel">
+        <h3 class="section-title">文件与业务信息</h3>
+        <div class="meta">
+          <p><strong>业务域：</strong>{{BUSINESS_DOMAIN}}</p>
+          <p><strong>区块链：</strong>{{CHAIN}}</p>
+          <p><strong>编译器版本：</strong>{{COMPILER_VERSION}}</p>
+          <p><strong>上传时间：</strong>{{UPLOAD_TIME}}</p>
+          <p style="grid-column:1/-1;"><strong>备注：</strong>{{NOTES}}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="border-top: 1px solid var(--border);">
+      <h3 class="section-title">关键发现（Top Findings）</h3>
+      <div class="findings">
+        {{TOP_FINDINGS_HTML}}
+      </div>
+    </div>
+
+    <div class="footer">
+      本报告由智能合约安全分析系统自动生成 ｜ 可追溯ID：{{JOB_ID}}
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,152 @@
+@page {
+    size: A4;
+    margin: 1cm;
+    @top-center {
+        content: "智能合约安全分析报告";
+        font-size: 10pt;
+        color: #666;
+    }
+    @bottom-center {
+        content: "第 " counter(page) " 页，共 " counter(pages) " 页";
+        font-size: 10pt;
+        color: #666;
+    }
+}
+
+body {
+    font-family: 'Arial', 'SimSun', sans-serif;
+    line-height: 1.6;
+    color: #333;
+}
+
+.container {
+    max-width: 100%;
+    margin: 0;
+    padding: 20px;
+}
+
+.header {
+    text-align: center;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+    page-break-after: avoid;
+}
+
+.title {
+    color: #333;
+    font-size: 24px;
+    margin: 0;
+    page-break-after: avoid;
+}
+
+.subtitle {
+    color: #666;
+    font-size: 14px;
+    margin: 5px 0;
+}
+
+.score-section {
+    display: flex;
+    justify-content: space-around;
+    margin: 30px 0;
+    page-break-inside: avoid;
+}
+
+.score-card {
+    text-align: center;
+    padding: 15px;
+    border-radius: 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    flex: 1;
+    margin: 0 10px;
+}
+
+.score-value {
+    font-size: 36px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.score-label {
+    font-size: 12px;
+    color: #666;
+}
+
+.section {
+    margin: 25px 0;
+    page-break-inside: avoid;
+}
+
+.section-title {
+    font-size: 18px;
+    color: #333;
+    border-left: 4px solid #007bff;
+    padding-left: 15px;
+    margin-bottom: 15px;
+    page-break-after: avoid;
+}
+
+.finding {
+    background: #f8f9fa;
+    border-left: 4px solid #007bff;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 4px;
+    page-break-inside: avoid;
+}
+
+.finding-header {
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.finding-details p {
+    margin: 5px 0;
+    font-size: 12px;
+}
+
+.meta-info {
+    background: #e9ecef;
+    padding: 15px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.meta-info p {
+    margin: 5px 0;
+}
+
+.footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #666;
+    font-size: 10px;
+    page-break-before: avoid;
+}
+
+/* 分页优化 */
+.page-break {
+    page-break-before: always;
+}
+
+/* 表格样式 */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 12px;
+}
+
+th, td {
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    text-align: left;
+}
+
+th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}

@@ -1,183 +1,66 @@
-## **SCANA API 使用文档**
+## 依赖
+- Python 包：Flask, SQLAlchemy, Flask-CORS, requests, torch, weasyprint, pdfkit
+- 系统库（二选一）
+  - weasyprint：cairo, pango, gdk-pixbuf, libffi
+  - pdfkit：wkhtmltopdf
 
-### **服务概述**
+## 核心端点
+- 上传合约（自动触发 LLM 初判）
+  - POST `/api/uploads` (multipart/form-data: file, chain, compiler_version, notes)
+  - 说明：业务域固定为跨境贸易（cross_border），无需传 business_domain
+- 创建作业（后台执行完整流程）
+  - POST `/api/jobs`  {"upload_id": "..."}
+- 作业详情/状态
+  - GET `/api/jobs/{job_id}`
+- 作业列表
+  - GET `/api/jobs/list?status=...&page=1&per_page=20`
+- 报告查看/下载
+  - GET `/api/reports/{job_id}.html`
+  - GET `/api/reports/{job_id}.pdf`
+  - POST `/api/reports/sample` （生成跨境贸易示例报告，返回路径）
 
-SCANA 是一个智能合约漏洞检测平台，提供注册、登录、代码提交、扫描状态查询及历史记录功能。
-后端使用预训练的 **BLSTM + Attention** 模型预测潜在漏洞，并返回扫描结果。
+## 产物结构（uploads/{upload_id}/）
+- `meta.json`：上传元信息（filename、chain、compiler_version、notes、upload_time）
+- 源文件（原始 .sol）
+- `preproc/`：预处理副本
+- `llm_result.json`：LLM 初判
+- `ml_result.json`：ML 推理
+- `fusion_result.json`：融合结果（final_score、severity、top_findings 等）
+- `report.html`：最终报告（模板：`static/report_template.html`）
+- `report.pdf`：PDF 报告（WeasyPrint 优先，pdfkit 兜底；样式：`static/report.css`）
 
----
+## 处理流程（跨境贸易场景）
+1. 上传合约：自动触发 LLM 初判，保存 `llm_result.json`
+2. 创建作业：PREPROCESSING → LLM_ANALYZING（多阶段：precheck → compliance → deep_audit，聚合结果） → ML_INFER → FUSING → REPORT_READY
+3. 融合（固定跨境贸易权重）：final_score = α·ML_prob + β·LLM_overall + γ·issue_aggregation（α=0.35, β=0.45, γ=0.20；冲突阈=0.28）
+4. 报告：基于 `static/report_template.html` 渲染 HTML，使用 `static/report.css` 生成 PDF（WeasyPrint 优先，pdfkit 兜底）
 
-## **基础信息**
+## 最小验证
+```bash
+# 1) 上传
+curl -X POST http://localhost:8000/api/uploads \
+  -F "file=@contract.sol" \
+  -F "chain=ethereum" \
+  -F "compiler_version=0.8.19" \
+  -F "notes=跨境贸易结算合约"
+# ⇒ {"upload_id":"..."}
 
-* **Base URL**: `http://<server>:8000/api`
-* **认证方式**: 会话（Session Cookie），需要先登录后再调用扫描相关接口。
-* **数据格式**: 所有请求与响应均使用 `application/json`，文件上传使用 `multipart/form-data`。
+# 2) 创建作业
+curl -X POST http://localhost:8000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"upload_id":"..."}'
+# ⇒ {"job_id":"..."}
 
----
+# 3) 轮询状态
+curl http://localhost:8000/api/jobs/{job_id}
 
-## **接口一览**
+# 4) 查看/下载报告
+curl http://localhost:8000/api/reports/{job_id}.html
+curl -O http://localhost:8000/api/reports/{job_id}.pdf
 
-### **1. 用户注册**
+# 5) 生成示例报告（跨境贸易演示）
+curl -X POST http://localhost:8000/api/reports/sample
+```
 
-* **URL**: `/register`
-* **方法**: `POST`
-* **请求参数（JSON）**:
-
-  ```json
-  {
-    "username": "user123",
-    "password": "securePassword"
-  }
-  ```
-* **响应**:
-
-  * **201**: `{"message": "Registration successful."}`
-  * **409**: `{"error": "Username 'user123' already exists."}`
-
----
-
-### **2. 用户登录**
-
-* **URL**: `/login`
-* **方法**: `POST`
-* **请求参数（JSON）**:
-
-  ```json
-  {
-    "username": "user123",
-    "password": "securePassword"
-  }
-  ```
-* **响应**:
-
-  * **200**:
-
-    ```json
-    {
-      "message": "Login successful.",
-      "username": "user123"
-    }
-    ```
-  * **401**: `{"error": "Invalid username or password."}`
-
----
-
-### **3. 用户登出**
-
-* **URL**: `/logout`
-* **方法**: `POST`
-* **响应**:
-
-  * **200**: `{"message": "Logged out successfully."}`
-
----
-
-### **4. 启动代码扫描**
-
-* **URL**: `/scan/start`
-* **方法**: `POST`
-* **请求类型**: `multipart/form-data` 或 `application/json`
-* **请求参数**:
-
-  * **方式一：文件上传**
-
-    * 参数：`file`（必填）
-  * **方式二：直接传代码**
-
-    ```json
-    {
-      "filename": "contract.sol",
-      "code": "pragma solidity ^0.8.0; ..."
-    }
-    ```
-* **响应**:
-
-  * **202**:
-
-    ```json
-    {
-      "message": "Scan task initiated successfully.",
-      "task_id": "550e8400-e29b-41d4-a716-446655440000"
-    }
-    ```
-  * **401**: `{"error": "Authentication required."}`
-
----
-
-### **5. 查询扫描状态**
-
-* **URL**: `/scan/status/<task_id>`
-* **方法**: `GET`
-* **响应示例**:
-
-  ```json
-  {
-    "task_id": "550e8400-e29b-41d4-a716-446655440000",
-    "filename": "contract.sol",
-    "status": "done",
-    "progress": 1.0,
-    "lines_scanned": 120,
-    "vul_distribution": {
-      "high": 1,
-      "medium": 0,
-      "low": 0
-    },
-    "vul_list": [
-      {
-        "id": "aabbccdd-1122-3344-5566-77889900aabb",
-        "line": 1,
-        "type": "predicted_reentrancy",
-        "severity": "high",
-        "description": "A potential vulnerability was detected with a confidence of 92.50%.",
-        "confidence": "0.9250"
-      }
-    ],
-    "vul_prob": 0.925,
-    "embedding_shape": [1, 300, 1700],
-    "start_time": "2025-08-27T14:32:01.123456",
-    "end_time": "2025-08-27T14:32:05.987654",
-    "duration": "4.86s",
-    "error_msg": null
-  }
-  ```
-* **错误码**:
-
-  * **401**: 未登录
-  * **403**: 访问非本人任务
-  * **404**: 任务不存在
-
----
-
-### **6. 查询扫描历史**
-
-* **URL**: `/scan/history`
-* **方法**: `GET`
-* **响应**:
-
-  ```json
-  [
-    {
-      "task_id": "...",
-      "filename": "contract1.sol",
-      "status": "done",
-      "progress": 1.0,
-      "lines_scanned": 80,
-      ...
-    },
-    {
-      "task_id": "...",
-      "filename": "contract2.sol",
-      "status": "failed",
-      ...
-    }
-  ]
-  ```
-
----
-
-## **状态说明**
-
-* **pending**: 任务已创建，等待执行
-* **running**: 扫描中
-* **done**: 扫描完成，结果可查询
-* **failed**: 扫描失败，`error_msg` 提供错误信息
+## 注意
+- LLM_API_KEY 未配置时，LLM 初判会失败（流程仍可继续，但融合与报告信息受限）
